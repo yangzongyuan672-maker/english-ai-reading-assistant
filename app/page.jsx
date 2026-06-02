@@ -1,40 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const modes = [
-  { id: "product", label: "商品翻译", hint: "商品标题、描述、参数、评论" },
-  { id: "summary", label: "资料总结", hint: "文章、通知、说明书、资料" },
-  { id: "webpage", label: "网页理解", hint: "网页文字或链接内容" },
-  { id: "email", label: "邮件理解", hint: "英文邮件和回复建议" },
-  { id: "image", label: "截图识别", hint: "截图、照片、PDF" }
+  { id: "summary", label: "资料总结" },
+  { id: "imageTranslate", label: "翻译图片" },
+  { id: "product", label: "商品介绍" }
 ];
 
-const examples = {
-  product: "Paste an English product title, description, specs or reviews here...",
-  summary: "Paste an English article, school notice, document or PDF text here...",
-  webpage: "Paste English webpage content or a link here...",
-  email: "Paste the English email here...",
-  image: "Upload a screenshot, take a photo, or add extra notes here..."
-};
-
 export default function Home() {
-  const [mode, setMode] = useState("product");
-  const [text, setText] = useState("");
+  const [mode, setMode] = useState("summary");
   const [result, setResult] = useState("");
-  const [file, setFile] = useState(null);
-  const [preview, setPreview] = useState("");
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState("请选择下方功能");
   const [busy, setBusy] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
-  const [copyText, setCopyText] = useState("复制结果");
+  const [preview, setPreview] = useState("");
+  const [selectedName, setSelectedName] = useState("");
+  const fileInputRef = useRef(null);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
-
-  const activeMode = useMemo(
-    () => modes.find((item) => item.id === mode) || modes[0],
-    [mode]
-  );
 
   useEffect(() => {
     return () => stopCamera();
@@ -46,71 +31,52 @@ export default function Home() {
     }
   }, [cameraOpen]);
 
-  useEffect(() => {
-    if (!file) {
-      setPreview("");
-      return;
-    }
+  function chooseMode(nextMode) {
+    if (busy) return;
+    stopCamera();
+    setMode(nextMode);
+    setSheetOpen(true);
+    setStatus("请选择图片、文件，或打开相机");
+  }
+
+  function chooseFile() {
+    setSheetOpen(false);
+    fileInputRef.current?.click();
+  }
+
+  async function onFileChange(event) {
+    const selected = event.target.files?.[0];
+    event.target.value = "";
+    if (!selected) return;
+    showPreview(selected);
+    await analyze(selected, mode);
+  }
+
+  function showPreview(file) {
+    setSelectedName(file.name || "已选择文件");
     if (!file.type.startsWith("image/")) {
       setPreview("");
       return;
     }
     const url = URL.createObjectURL(file);
-    setPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
-
-  async function analyze(nextMode = mode, nextFile = file) {
-    if (busy) return;
-    if (!text.trim() && !nextFile) {
-      setStatus("请先粘贴英文内容，或上传/拍摄图片。");
-      return;
-    }
-
-    setBusy(true);
-    setStatus(nextFile ? "正在识别和翻译..." : "正在分析英文内容...");
-    setResult("");
-
-    try {
-      const formData = new FormData();
-      formData.append("mode", nextMode);
-      formData.append("text", text);
-      if (nextFile) formData.append("file", nextFile);
-
-      const response = await fetch("/api/analyze", {
-        method: "POST",
-        body: formData
-      });
-      const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error || "分析失败");
-      setResult(data.result);
-      setStatus("完成");
-    } catch (error) {
-      setStatus(error.message || "分析失败，请稍后再试。");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function copyResult() {
-    if (!result) return;
-    await navigator.clipboard.writeText(result);
-    setCopyText("已复制");
-    window.setTimeout(() => setCopyText("复制结果"), 1200);
+    setPreview((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return url;
+    });
   }
 
   async function openCamera() {
     try {
-      setStatus("正在打开相机...");
+      setSheetOpen(false);
+      setStatus("相机已打开，对准内容后点拍照");
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment" },
         audio: false
       });
       streamRef.current = stream;
       setCameraOpen(true);
-      setStatus("对准英文内容，点击拍照识别。");
     } catch {
-      setStatus("无法打开相机，请检查浏览器相机权限。");
+      setStatus("无法打开相机，请检查浏览器相机权限");
     }
   }
 
@@ -122,7 +88,7 @@ export default function Home() {
 
   async function captureAndAnalyze() {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || busy) return;
 
     const canvas = document.createElement("canvas");
     canvas.width = video.videoWidth || 1280;
@@ -132,152 +98,139 @@ export default function Home() {
 
     canvas.toBlob(async (blob) => {
       if (!blob) {
-        setStatus("拍照失败，请再试一次。");
+        setStatus("拍照失败，请再试一次");
         return;
       }
       const photo = new File([blob], "camera-photo.jpg", { type: "image/jpeg" });
-      setMode("image");
-      setFile(photo);
+      showPreview(photo);
       stopCamera();
-      await analyze("image", photo);
+      await analyze(photo, mode);
     }, "image/jpeg", 0.92);
   }
 
-  function onFileChange(event) {
-    const selected = event.target.files?.[0];
-    if (!selected) return;
-    setMode(selected.type.startsWith("image/") ? "image" : mode);
-    setFile(selected);
-    setStatus(`${selected.name} 已选择，可以开始分析。`);
+  async function analyze(file, nextMode) {
+    setBusy(true);
+    setResult("");
+    setStatus("正在识别，请稍等...");
+
+    try {
+      const formData = new FormData();
+      formData.append("mode", nextMode);
+      formData.append("file", file);
+
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        body: formData
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || "分析失败");
+      setResult(data.result);
+      setStatus("完成");
+    } catch (error) {
+      setStatus(error.message || "分析失败，请稍后再试");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
-    <main className="min-h-screen px-4 py-5 text-ink sm:px-6 lg:px-8">
-      <div className="mx-auto grid max-w-6xl gap-5 lg:grid-cols-[0.92fr_1.08fr]">
-        <section className="glass rounded-[8px] border border-white/70 p-5 shadow-soft sm:p-6">
-          <div className="mb-5">
-            <p className="text-sm font-semibold text-slate-600">英文内容智能翻译助手</p>
-            <h1 className="mt-2 text-3xl font-black tracking-normal sm:text-4xl">
-              English AI Reading Assistant
-            </h1>
-            <p className="mt-3 text-base leading-7 text-slate-700">
-              粘贴英文、上传截图/PDF，或直接用相机拍照。系统会自动翻译、总结，并用简单中文解释重点。
-            </p>
-          </div>
+    <main className="min-h-screen bg-paper pb-32 text-ink">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,application/pdf"
+        className="sr-only"
+        onChange={onFileChange}
+      />
 
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 lg:grid-cols-2">
-            {modes.map((item) => (
+      <section className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-4 pt-4 sm:px-6">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-3">
+          <p className="text-sm font-bold text-slate-600">{modes.find((item) => item.id === mode)?.label}</p>
+          <p className="text-sm font-semibold text-slate-500">{status}</p>
+        </div>
+
+        {cameraOpen && (
+          <div className="mt-4 overflow-hidden rounded-[8px] bg-black">
+            <video ref={videoRef} autoPlay playsInline muted className="aspect-[3/4] w-full object-cover sm:aspect-video" />
+            <div className="grid grid-cols-2 gap-2 bg-white p-2">
               <button
-                key={item.id}
                 type="button"
-                onClick={() => setMode(item.id)}
-                className={`min-h-[72px] rounded-[8px] border px-3 py-3 text-left transition ${
-                  mode === item.id
-                    ? "border-ink bg-ink text-white"
-                    : "border-slate-200 bg-white/82 text-ink hover:border-slate-400"
-                }`}
+                onClick={stopCamera}
+                className="min-h-12 rounded-[8px] bg-slate-100 font-bold text-slate-700"
               >
-                <span className="block text-base font-extrabold">{item.label}</span>
-                <span className={`mt-1 block text-xs leading-5 ${mode === item.id ? "text-white/72" : "text-slate-500"}`}>
-                  {item.hint}
-                </span>
+                取消
               </button>
-            ))}
-          </div>
-
-          <div className="mt-5 rounded-[8px] border border-slate-200 bg-white/88 p-3">
-            <label className="mb-2 block text-sm font-bold text-slate-700">
-              当前模式：{activeMode.label}
-            </label>
-            <textarea
-              value={text}
-              onChange={(event) => setText(event.target.value)}
-              placeholder={examples[mode]}
-              className="h-48 w-full resize-none rounded-[8px] border border-slate-200 bg-white p-4 text-base leading-7 text-ink placeholder:text-slate-400"
-            />
-          </div>
-
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <label className="flex min-h-[48px] cursor-pointer items-center justify-center rounded-[8px] border border-slate-300 bg-white px-4 text-sm font-extrabold">
-              上传图片/PDF
-              <input
-                type="file"
-                accept="image/*,application/pdf"
-                className="sr-only"
-                onChange={onFileChange}
-              />
-            </label>
-            <button
-              type="button"
-              onClick={cameraOpen ? captureAndAnalyze : openCamera}
-              className="min-h-[48px] rounded-[8px] bg-slate-900 px-4 text-sm font-extrabold text-white"
-            >
-              {cameraOpen ? "拍照识别" : "打开相机"}
-            </button>
-            <button
-              type="button"
-              onClick={() => analyze()}
-              disabled={busy}
-              className="min-h-[48px] rounded-[8px] bg-blue-600 px-4 text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:bg-slate-400"
-            >
-              {busy ? "处理中..." : mode === "product" ? "商品翻译" : mode === "summary" ? "资料总结" : "开始分析"}
-            </button>
-          </div>
-
-          {cameraOpen && (
-            <div className="mt-4 overflow-hidden rounded-[8px] border border-slate-300 bg-black">
-              <video ref={videoRef} autoPlay playsInline muted className="aspect-video w-full object-cover" />
+              <button
+                type="button"
+                onClick={captureAndAnalyze}
+                disabled={busy}
+                className="min-h-12 rounded-[8px] bg-ink font-bold text-white disabled:bg-slate-400"
+              >
+                拍照
+              </button>
             </div>
-          )}
-
-          {(file || preview) && (
-            <div className="mt-4 rounded-[8px] border border-slate-200 bg-white/82 p-3 text-sm text-slate-600">
-              <div className="flex items-center justify-between gap-3">
-                <span className="truncate">{file?.name}</span>
-                <button
-                  type="button"
-                  onClick={() => setFile(null)}
-                  className="shrink-0 rounded-[8px] bg-slate-100 px-3 py-2 font-bold text-slate-700"
-                >
-                  清除
-                </button>
-              </div>
-              {preview && <img src={preview} alt="上传预览" className="mt-3 max-h-64 w-full rounded-[8px] object-contain" />}
-            </div>
-          )}
-
-          {status && <p className="mt-4 min-h-6 text-sm font-semibold text-slate-700">{status}</p>}
-        </section>
-
-        <section className="glass rounded-[8px] border border-white/70 p-5 shadow-soft sm:p-6">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-slate-600">中文结果</p>
-              <h2 className="text-2xl font-black">翻译与解释</h2>
-            </div>
-            <button
-              type="button"
-              onClick={copyResult}
-              disabled={!result}
-              className="min-h-[42px] rounded-[8px] bg-ink px-4 text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
-            >
-              {copyText}
-            </button>
           </div>
+        )}
 
-          <div className="min-h-[520px] whitespace-pre-wrap rounded-[8px] border border-slate-200 bg-white/90 p-4 text-base leading-8 text-ink">
-            {result || (
-              <div className="grid h-full place-items-center text-center text-slate-500">
-                <p>
-                  结果会显示在这里。
-                  <br />
-                  内容会按栏目整理，方便复制给自己或家人看。
-                </p>
-              </div>
+        {(preview || selectedName) && !cameraOpen && (
+          <div className="mt-4 rounded-[8px] border border-slate-200 bg-white p-3">
+            {preview ? (
+              <img src={preview} alt="已选择内容" className="max-h-72 w-full rounded-[8px] object-contain" />
+            ) : (
+              <p className="py-5 text-center font-bold text-slate-600">{selectedName}</p>
             )}
           </div>
-        </section>
-      </div>
+        )}
+
+        <article className="mt-4 flex-1 whitespace-pre-wrap rounded-[8px] bg-white p-4 text-[17px] leading-8 shadow-soft">
+          {result || (
+            <div className="grid min-h-[55vh] place-items-center text-center text-slate-400">
+              <p>{busy ? "正在生成中文内容..." : "结果会显示在这里"}</p>
+            </div>
+          )}
+        </article>
+      </section>
+
+      {sheetOpen && (
+        <div className="fixed inset-x-0 bottom-24 z-20 mx-auto w-full max-w-3xl px-4">
+          <div className="grid gap-2 rounded-[8px] border border-slate-200 bg-white p-2 shadow-soft">
+            <button
+              type="button"
+              onClick={chooseFile}
+              className="min-h-12 rounded-[8px] bg-slate-100 font-extrabold text-ink"
+            >
+              选择图片或文件
+            </button>
+            <button
+              type="button"
+              onClick={openCamera}
+              className="min-h-12 rounded-[8px] bg-ink font-extrabold text-white"
+            >
+              打开相机
+            </button>
+          </div>
+        </div>
+      )}
+
+      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/92 px-3 py-3 backdrop-blur">
+        <div className="mx-auto grid max-w-3xl grid-cols-3 gap-2">
+          {modes.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => chooseMode(item.id)}
+              disabled={busy}
+              className={`min-h-14 rounded-[8px] text-sm font-black transition ${
+                mode === item.id
+                  ? "bg-ink text-white"
+                  : "bg-slate-100 text-slate-700"
+              } disabled:opacity-60`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </nav>
     </main>
   );
 }
