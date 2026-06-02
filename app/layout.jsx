@@ -1,8 +1,22 @@
 import "./globals.css";
 
+export const viewport = {
+  themeColor: "#111827"
+};
+
 export const metadata = {
-  title: "English AI Reading Assistant",
-  description: "英文内容智能翻译助手"
+  title: "Nancy",
+  description: "English AI Reading Assistant",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    title: "Nancy",
+    statusBarStyle: "default"
+  },
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/icon.svg", type: "image/svg+xml" }]
+  }
 };
 
 export default function RootLayout({ children }) {
