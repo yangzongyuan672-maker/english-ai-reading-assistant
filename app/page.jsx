@@ -19,6 +19,8 @@ export default function Home() {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [preview, setPreview] = useState("");
   const [selectedName, setSelectedName] = useState("");
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [inputText, setInputText] = useState("");
   const fileInputRef = useRef(null);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
@@ -50,8 +52,9 @@ export default function Home() {
     const selected = event.target.files?.[0];
     event.target.value = "";
     if (!selected) return;
+    setSelectedFile(selected);
     showPreview(selected);
-    await analyze(selected, mode);
+    await analyze({ file: selected, nextMode: mode, text: inputText });
   }
 
   function showPreview(file) {
@@ -104,13 +107,24 @@ export default function Home() {
         return;
       }
       const photo = new File([blob], "camera-photo.jpg", { type: "image/jpeg" });
+      setSelectedFile(photo);
       showPreview(photo);
       stopCamera();
-      await analyze(photo, mode);
+      await analyze({ file: photo, nextMode: mode, text: inputText });
     }, "image/jpeg", 0.92);
   }
 
-  async function analyze(file, nextMode) {
+  async function sendText() {
+    await analyze({ file: selectedFile, nextMode: mode, text: inputText });
+  }
+
+  async function analyze({ file, nextMode, text }) {
+    const cleanText = text.trim();
+    if (!file && !cleanText) {
+      setStatus("请先输入内容，或选择图片/文件");
+      return;
+    }
+
     setBusy(true);
     setResult("");
     setStatus("正在识别，请稍等...");
@@ -118,7 +132,8 @@ export default function Home() {
     try {
       const formData = new FormData();
       formData.append("mode", nextMode);
-      formData.append("file", file);
+      formData.append("text", cleanText);
+      if (file) formData.append("file", file);
 
       const response = await fetch("/api/analyze", {
         method: "POST",
@@ -136,7 +151,7 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-paper pb-32 text-ink">
+    <main className="min-h-screen bg-paper pb-44 text-ink">
       <input
         ref={fileInputRef}
         type="file"
@@ -194,7 +209,7 @@ export default function Home() {
       </section>
 
       {sheetOpen && (
-        <div className="fixed inset-x-0 bottom-24 z-20 mx-auto w-full max-w-3xl px-4">
+        <div className="fixed inset-x-0 bottom-40 z-20 mx-auto w-full max-w-3xl px-4">
           <div className="grid gap-2 rounded-[8px] border border-slate-200 bg-white p-2 shadow-soft">
             <button
               type="button"
@@ -213,6 +228,31 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      <div className="fixed inset-x-0 bottom-[86px] z-30 border-t border-slate-200 bg-white/92 px-2 py-2 backdrop-blur">
+        <div className="mx-auto flex max-w-3xl gap-2">
+          <input
+            value={inputText}
+            onChange={(event) => setInputText(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                sendText();
+              }
+            }}
+            placeholder="输入问题或补充要求"
+            className="min-h-12 min-w-0 flex-1 rounded-[8px] border border-slate-200 bg-white px-3 text-base text-ink placeholder:text-slate-400"
+          />
+          <button
+            type="button"
+            onClick={sendText}
+            disabled={busy}
+            className="min-h-12 rounded-[8px] bg-ink px-4 text-sm font-black text-white disabled:bg-slate-400"
+          >
+            发送
+          </button>
+        </div>
+      </div>
 
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/92 px-2 py-3 backdrop-blur">
         <div className="mx-auto grid max-w-3xl grid-cols-5 gap-1.5">
