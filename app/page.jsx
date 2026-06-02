@@ -18,6 +18,13 @@ const saveFolders = [
   { id: "other", label: "其他" }
 ];
 
+const driveFolderLinks = {
+  important: "https://drive.google.com/drive/my-drive",
+  documents: "https://drive.google.com/drive/my-drive",
+  media: "https://drive.google.com/drive/my-drive",
+  other: "https://drive.google.com/drive/my-drive"
+};
+
 const historyKey = "nancy-history-v1";
 
 export default function Home() {
@@ -85,7 +92,13 @@ export default function Home() {
     if (!selected) return;
     setSelectedFile(selected);
     showPreview(selected);
-    setStatus(mode === "save" ? "已选择文件，请选择文件夹后保存" : "已选择内容，点发送开始分析");
+    if (mode === "save") {
+      setStatus("已选择文件，点保存打开 Google Drive");
+      setResult(`已选择：${selected.name || "文件"}\n\n点“打开 Google Drive 保存”，然后在 Google Drive 里选择文件夹上传。`);
+    } else {
+      setStatus("已选择内容，点发送开始分析");
+      setResult(`${selected.type === "application/pdf" ? "PDF" : "文件"}已选择：${selected.name || "已选择文件"}\n\n点右下方“发送”开始分析。`);
+    }
   }
 
   function showPreview(file) {
@@ -142,7 +155,13 @@ export default function Home() {
       setSelectedFile(photo);
       showPreview(photo);
       stopCamera();
-      setStatus(mode === "save" ? "已拍照，请选择文件夹后保存" : "已拍照，点发送开始分析");
+      if (mode === "save") {
+        setStatus("已拍照，点保存打开 Google Drive");
+        setResult("照片已准备好。\n\n点“打开 Google Drive 保存”，然后在 Google Drive 里选择文件夹上传。");
+      } else {
+        setStatus("已拍照，点发送开始分析");
+        setResult("照片已准备好。\n\n点右下方“发送”开始分析。");
+      }
     }, "image/jpeg", 0.92);
   }
 
@@ -193,34 +212,25 @@ export default function Home() {
     }
   }
 
-  async function saveToDrive() {
+  function saveToDrive() {
     if (!selectedFile) {
       setStatus("请先选择文件或拍照");
       return;
     }
-    setBusy(true);
-    setStatus("正在保存到 Google Drive...");
-
-    try {
-      const formData = new FormData();
-      formData.append("file", selectedFile);
-      formData.append("folder", saveFolder);
-      formData.append("note", inputText.trim());
-
-      const response = await fetch("/api/save", {
-        method: "POST",
-        body: formData
-      });
-      const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.error || "保存失败");
-      setStatus(`已保存到 ${saveFolders.find((item) => item.id === saveFolder)?.label}`);
-      setResult(data.message || "文件已保存到 Google Drive。");
-      saveHistory(data.message || "文件已保存到 Google Drive。", "save");
-    } catch (error) {
-      setStatus(error.message || "保存失败，请稍后再试");
-    } finally {
-      setBusy(false);
-    }
+    const folderName = saveFolders.find((item) => item.id === saveFolder)?.label || "其他";
+    const message = [
+      `准备保存：${selectedFile.name || "已选择文件"}`,
+      `建议文件夹：${folderName}`,
+      "",
+      "我已经帮你打开 Google Drive。",
+      "请在 Google Drive 里进入对应文件夹，然后点击“新建”上传这个文件。",
+      "",
+      "如果你在手机上使用，也可以点系统分享，把文件保存到 Google Drive。"
+    ].join("\n");
+    setStatus("已打开 Google Drive");
+    setResult(message);
+    saveHistory(message, "save");
+    window.open(driveFolderLinks[saveFolder], "_blank", "noopener,noreferrer");
   }
 
   function saveHistory(text, historyMode) {
@@ -327,7 +337,7 @@ export default function Home() {
               disabled={busy || !selectedFile}
               className="mt-3 min-h-12 w-full rounded-[8px] bg-ink font-black text-white disabled:bg-slate-400"
             >
-              保存到 Google Drive
+              打开 Google Drive 保存
             </button>
           </div>
         )}
