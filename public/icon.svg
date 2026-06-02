@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Nancy app icon">
+  <defs>
+    <linearGradient id="bg" x1="86" y1="54" x2="434" y2="460" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#111827"/>
+      <stop offset="0.52" stop-color="#25546f"/>
+      <stop offset="1" stop-color="#0f766e"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="122" y1="110" x2="382" y2="388" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#ecfeff"/>
+    </linearGradient>
+    <filter id="shadow" x="40" y="58" width="432" height="390" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#020617" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="108" fill="url(#bg)"/>
+  <circle cx="392" cy="112" r="44" fill="#5eead4" opacity="0.9"/>
+  <circle cx="112" cy="390" r="58" fill="#fbbf24" opacity="0.92"/>
+  <g filter="url(#shadow)">
+    <rect x="62" y="118" width="388" height="276" rx="54" fill="url(#accent)"/>
+    <rect x="94" y="154" width="324" height="204" rx="34" fill="#f8fafc" stroke="#d8eef0" stroke-width="4"/>
+  </g>
+  <text x="256" y="258" text-anchor="middle" font-family="Inter, Arial, Helvetica, sans-serif" font-size="84" font-weight="800" letter-spacing="0" fill="#111827">Nancy</text>
+  <text x="256" y="320" text-anchor="middle" font-family="Inter, Arial, Helvetica, sans-serif" font-size="38" font-weight="700" letter-spacing="0" fill="#0f766e">AI Reading</text>
+</svg>
