@@ -54,7 +54,7 @@ export default function Home() {
     if (!selected) return;
     setSelectedFile(selected);
     showPreview(selected);
-    await analyze({ file: selected, nextMode: mode, text: inputText });
+    setStatus("已选择内容，点发送开始分析");
   }
 
   function showPreview(file) {
@@ -110,7 +110,7 @@ export default function Home() {
       setSelectedFile(photo);
       showPreview(photo);
       stopCamera();
-      await analyze({ file: photo, nextMode: mode, text: inputText });
+      setStatus("已拍照，点发送开始分析");
     }, "image/jpeg", 0.92);
   }
 
