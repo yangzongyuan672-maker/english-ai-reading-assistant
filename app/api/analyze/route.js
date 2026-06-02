@@ -59,6 +59,10 @@ export async function POST(request) {
     const text = String(formData.get("text") || "").trim();
     const file = formData.get("file");
 
+    if (mode === "calendar") {
+      return createCalendarEvent(text);
+    }
+
     let extractedText = "";
     let webpageText = "";
     let imagePart = null;
@@ -156,9 +160,121 @@ export async function POST(request) {
 }
 
 function normalizeMode(mode) {
-  return ["product", "summary", "imageTranslate", "homework", "calorie"].includes(mode)
+  return ["product", "summary", "imageTranslate", "homework", "calorie", "calendar"].includes(mode)
     ? mode
     : "summary";
+}
+
+async function createCalendarEvent(text) {
+  if (!text) {
+    return Response.json(
+      { ok: false, error: "请先输入日程内容，比如时间、标题、提醒方式。" },
+      { status: 400 }
+    );
+  }
+
+  const now = new Date();
+  const completion = await openai.chat.completions.create({
+    model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
+    temperature: 0,
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "system",
+        content: [
+          "你是日历事件解析助手。只输出 JSON。",
+          "把用户中文自然语言解析成 Google Calendar 事件。",
+          "默认时区 America/Toronto。",
+          "如果用户没有说结束时间，默认持续 1 小时。",
+          "如果用户没有说提醒，默认提前 30 分钟。",
+          "如果时间不完整，请根据当前日期推断；如果完全没有日期时间，needsMoreInfo=true。",
+          "JSON 字段：title, details, location, start, end, timezone, reminderMinutes, needsMoreInfo, question。",
+          "start/end 使用 ISO 8601，带时区偏移。reminderMinutes 是数字。"
+        ].join(" ")
+      },
+      {
+        role: "user",
+        content: `当前时间：${now.toISOString()}。用户输入：${text}`
+      }
+    ]
+  });
+
+  let event = {};
+  try {
+    event = JSON.parse(completion.choices?.[0]?.message?.content || "{}");
+  } catch {
+    event = {};
+  }
+
+  if (event.needsMoreInfo || !event.start || !event.title) {
+    return Response.json({
+      ok: true,
+      result: event.question || "我还缺少日期或时间。请补充：哪一天、几点、日程内容、提前多久提醒。"
+    });
+  }
+
+  const start = new Date(event.start);
+  const end = event.end ? new Date(event.end) : new Date(start.getTime() + 60 * 60 * 1000);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return Response.json({
+      ok: true,
+      result: "我没有识别出有效时间。请重新输入，比如：6月5日下午3点发布内容，提前30分钟提醒。"
+    });
+  }
+
+  const details = [
+    event.details || "",
+    event.reminderMinutes ? `提醒：提前 ${event.reminderMinutes} 分钟` : "提醒：提前 30 分钟"
+  ].filter(Boolean).join("\n");
+
+  const calendarUrl = buildCalendarUrl({
+    title: event.title,
+    details,
+    location: event.location || "",
+    start,
+    end
+  });
+
+  const result = [
+    "日程已准备好：",
+    `标题：${event.title}`,
+    `开始：${formatChineseDate(start)}`,
+    `结束：${formatChineseDate(end)}`,
+    `提醒：提前 ${event.reminderMinutes || 30} 分钟`,
+    event.location ? `地点：${event.location}` : "",
+    "",
+    "我已经打开 Google 日历新建页面，里面会预填这些信息。请在 Google 日历里点“保存”。"
+  ].filter(Boolean).join("\n");
+
+  return Response.json({ ok: true, result, calendarUrl });
+}
+
+function buildCalendarUrl({ title, details, location, start, end }) {
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: title,
+    dates: `${toGoogleDate(start)}/${toGoogleDate(end)}`,
+    details,
+    location,
+    ctz: "America/Toronto"
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+function toGoogleDate(date) {
+  return date.toISOString().replace(/[-:]|\.\d{3}/g, "");
+}
+
+function formatChineseDate(date) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "America/Toronto",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).format(date);
 }
 
 async function fileToDataUrl(file) {
