@@ -65,9 +65,24 @@ export async function POST(request) {
 
     if (file instanceof File && file.size > 0) {
       if (file.type === "application/pdf") {
-        const buffer = Buffer.from(await file.arrayBuffer());
-        const parsed = await pdfParse(buffer);
-        extractedText = parsed.text.trim();
+        try {
+          const buffer = Buffer.from(await file.arrayBuffer());
+          const parsed = await pdfParse(buffer);
+          extractedText = parsed.text.trim();
+        } catch (error) {
+          console.error("PDF parse failed", error);
+          return Response.json(
+            { ok: false, error: "这个 PDF 暂时读不到文字。可能是扫描件或图片 PDF，请改成截图/照片上传。" },
+            { status: 400 }
+          );
+        }
+
+        if (!extractedText) {
+          return Response.json(
+            { ok: false, error: "这个 PDF 里没有读取到文字。可能是扫描件，请改成截图/照片上传。" },
+            { status: 400 }
+          );
+        }
       } else if (file.type.startsWith("image/")) {
         const dataUrl = await fileToDataUrl(file);
         imagePart = { type: "image_url", image_url: { url: dataUrl } };
