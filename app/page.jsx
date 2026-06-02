@@ -5,7 +5,9 @@ import { useEffect, useRef, useState } from "react";
 const modes = [
   { id: "summary", label: "资料总结" },
   { id: "imageTranslate", label: "翻译图片" },
-  { id: "product", label: "商品介绍" }
+  { id: "product", label: "商品介绍" },
+  { id: "homework", label: "题目解答" },
+  { id: "calorie", label: "卡路里查询" }
 ];
 
 export default function Home() {
@@ -212,15 +214,15 @@ export default function Home() {
         </div>
       )}
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/92 px-3 py-3 backdrop-blur">
-        <div className="mx-auto grid max-w-3xl grid-cols-3 gap-2">
+      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/92 px-2 py-3 backdrop-blur">
+        <div className="mx-auto grid max-w-3xl grid-cols-5 gap-1.5">
           {modes.map((item) => (
             <button
               key={item.id}
               type="button"
               onClick={() => chooseMode(item.id)}
               disabled={busy}
-              className={`min-h-14 rounded-[8px] text-sm font-black transition ${
+              className={`min-h-14 rounded-[8px] px-1 text-[12px] font-black leading-tight transition sm:text-sm ${
                 mode === item.id
                   ? "bg-ink text-white"
                   : "bg-slate-100 text-slate-700"
